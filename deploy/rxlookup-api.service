@@ -1,0 +1,17 @@
+[Unit]
+Description=RX Lookup API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/rxlookup-api
+EnvironmentFile=-/opt/rxlookup-api/.env
+Environment=RX_DB=/var/lib/rxlookup/data.db
+ExecStart=/opt/rxlookup-api/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8787
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

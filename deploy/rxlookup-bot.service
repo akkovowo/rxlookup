@@ -1,0 +1,20 @@
+[Unit]
+Description=RX Lookup Telegram bot
+After=network.target rxlookup-api.service
+Wants=rxlookup-api.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/rxlookup-bot
+EnvironmentFile=-/opt/rxlookup-bot/.env
+EnvironmentFile=-/opt/rxlookup-api/.env
+ExecStart=/opt/rxlookup-bot/venv/bin/python /opt/rxlookup-bot/run.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=12
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
