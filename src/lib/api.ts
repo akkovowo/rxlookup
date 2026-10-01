@@ -29,7 +29,7 @@ export function setToken(token: string | null) {
 }
 
 export function apiUrl(path: string) {
-  return path.startsWith("http") ? path : path;
+  return path.startsWith("http") ? path : `${import.meta.env.VITE_API_BASE || ""}${path}`;
 }
 
 async function readBody(res: Response) {

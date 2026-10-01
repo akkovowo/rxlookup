@@ -10,12 +10,12 @@ import { useApp } from "@/lib/store";
 const PRESETS = [25, 50, 100, 250, 500];
 
 const METHODS = [
-  { id: "btc", label: "Bitcoin", hint: "Network fee", ticker: "BTC", icon: "/img/crypto/btc.svg", address: "bc1qrxlookupdemo000000000000000000000xyz" },
-  { id: "eth", label: "Ethereum", hint: "ERC-20", ticker: "ETH", icon: "/img/crypto/eth.svg", address: "0xA11CE00000000000000000000000RxLookup01" },
-  { id: "ltc", label: "Litecoin", hint: "On-chain", ticker: "LTC", icon: "/img/crypto/ltc.svg", address: "ltc1qrxlookupdemo000000000000000000abcd" },
-  { id: "sol", label: "Solana", hint: "On-chain", ticker: "SOL", icon: "/img/crypto/sol.svg", address: "SoLrxLookupDemo0000000000000000000001" },
-  { id: "usdt-trc", label: "USDT", hint: "TRC-20", ticker: "USDT", icon: "/img/crypto/usdt.svg", address: "TRxLookUpDemo0000000000000000000001" },
-  { id: "usdt-erc", label: "USDT", hint: "ERC-20", ticker: "USDT", icon: "/img/crypto/usdt.svg", address: "0xUSDT0000000000000000000000RxLookup02" },
+  { id: "btc", label: "Bitcoin", hint: "Network fee", ticker: "BTC", icon: `${import.meta.env.BASE_URL}img/crypto/btc.svg`, address: "bc1qrxlookupdemo000000000000000000000xyz" },
+  { id: "eth", label: "Ethereum", hint: "ERC-20", ticker: "ETH", icon: `${import.meta.env.BASE_URL}img/crypto/eth.svg`, address: "0xA11CE00000000000000000000000RxLookup01" },
+  { id: "ltc", label: "Litecoin", hint: "On-chain", ticker: "LTC", icon: `${import.meta.env.BASE_URL}img/crypto/ltc.svg`, address: "ltc1qrxlookupdemo000000000000000000abcd" },
+  { id: "sol", label: "Solana", hint: "On-chain", ticker: "SOL", icon: `${import.meta.env.BASE_URL}img/crypto/sol.svg`, address: "SoLrxLookupDemo0000000000000000000001" },
+  { id: "usdt-trc", label: "USDT", hint: "TRC-20", ticker: "USDT", icon: `${import.meta.env.BASE_URL}img/crypto/usdt.svg`, address: "TRxLookUpDemo0000000000000000000001" },
+  { id: "usdt-erc", label: "USDT", hint: "ERC-20", ticker: "USDT", icon: `${import.meta.env.BASE_URL}img/crypto/usdt.svg`, address: "0xUSDT0000000000000000000000RxLookup02" },
 ] as const;
 
 type Step = "confirm" | "generate" | "address" | "checking" | "success" | null;

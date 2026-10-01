@@ -1,21 +1,23 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, HashRouter } from "react-router-dom";
 import App from "./App";
 import { AppProvider } from "./lib/store";
 import { ThemeProvider } from "./lib/theme";
 import { ToastHost } from "./components/ToastHost";
 import "./styles.css";
 
+const Router = import.meta.env.VITE_HASH_ROUTER ? HashRouter : BrowserRouter;
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
-      <BrowserRouter>
+      <Router>
         <AppProvider>
           <App />
           <ToastHost />
         </AppProvider>
-      </BrowserRouter>
+      </Router>
     </ThemeProvider>
   </StrictMode>,
 );
