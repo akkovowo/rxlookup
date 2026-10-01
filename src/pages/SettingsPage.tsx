@@ -53,8 +53,8 @@ export function SettingsPage() {
 
   async function changePassword(e: FormEvent) {
     e.preventDefault();
-    if (current.length < 4 || next.length < 4) {
-      app.showToast("Use at least four characters");
+    if (current.length < 4 || next.length < 8) {
+      app.showToast("Use at least eight characters");
       return;
     }
     if (next !== again) {
@@ -245,7 +245,7 @@ export function SettingsPage() {
         <div className="set-card__head">
           <div>
             <h3>Change password</h3>
-            <p>Choose a key of at least four characters.</p>
+            <p>Choose a key of at least eight characters.</p>
           </div>
           <span className="set-card__icon" aria-hidden="true">
             <KeyRound size={16} />

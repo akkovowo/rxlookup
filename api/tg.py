@@ -272,8 +272,10 @@ def bot_register(payload: dict[str, Any], x_bot_secret: str | None = Header(None
     password = payload.get("password") or ""
     tid = int(payload.get("telegram_id") or 0)
     username = (payload.get("username") or "").lstrip("@")
-    if len(login) < 2 or len(password) < 4 or not tid:
-        raise HTTPException(400, "Choose a name and a password of at least four characters.")
+    if len(login) < 2 or len(login) > 32 or not re.match(r"^[a-z0-9][a-z0-9._-]*$", login) or len(password) < 8 or not tid:
+        raise HTTPException(400, "Choose a name and a password of at least eight characters.")
+    if login in {"admin", "estk", "root", "support", "rxlookup", "rx.desk"}:
+        raise HTTPException(409, "That name is taken.")
     with db() as con:
         if user_by_tg(con, tid):
             raise HTTPException(409, "This Telegram is already linked")

@@ -368,7 +368,7 @@ async def msg_reg_login(message: Message, state: FSMContext):
     await state.update_data(login=message.text.strip())
     await state.set_state(Form.reg_pass)
     await message.answer(
-        card("Register", "Now a password.", "▫️ At least four characters", emoji_id=M_STAR, fallback="*"),
+        card("Register", "Now a password.", "▫️ At least eight characters", emoji_id=M_STAR, fallback="*"),
         reply_markup=kb([[back()]]),
         link_preview_options=NO_PREVIEW,
     )

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -19,8 +20,35 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DB = os.environ.get("RX_DB", os.path.join(ROOT, "data.db"))
-SECRET = os.environ.get("RX_SECRET", "rxlookup-desk-secret-change-me").encode()
 
+
+def load_secret() -> bytes:
+    env = os.environ.get("RX_SECRET")
+    if env:
+        return env.encode()
+    path = os.path.join(os.path.dirname(DB) or ".", ".rx_secret")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            val = fh.read().strip()
+            if val:
+                return val.encode()
+    except OSError:
+        pass
+    val = secrets.token_hex(32)
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(val)
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    return val.encode()
+
+
+SECRET = load_secret()
+
+LOGIN_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+RESERVED_LOGINS = {"admin", "estk", "root", "support", "rxlookup", "rx.desk"}
+FAILS: dict[str, list[float]] = {}
 PLAN_DAYS = {"day": 1, "week": 7, "month": 30}
 PLAN_FIELD = {"desk": ("plan", "plan_until"), "api": ("api_plan", "api_plan_until")}
 
@@ -124,7 +152,7 @@ def b64d(text: str) -> bytes:
 def make_token(user: sqlite3.Row) -> str:
     payload = json.dumps({"uid": user["id"], "login": user["login"], "role": user["role"], "exp": time.time() + 14 * 86400})
     raw = b64(payload.encode())
-    sig = hmac.new(SECRET, raw.encode(), hashlib.sha256).hexdigest()[:40]
+    sig = hmac.new(SECRET, raw.encode(), hashlib.sha256).hexdigest()
     return f"{raw}.{sig}"
 
 
@@ -133,7 +161,7 @@ def parse_token(token: str) -> dict[str, Any]:
         raw, sig = token.split(".", 1)
     except ValueError as exc:
         raise HTTPException(401, "Invalid token") from exc
-    expect = hmac.new(SECRET, raw.encode(), hashlib.sha256).hexdigest()[:40]
+    expect = hmac.new(SECRET, raw.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expect, sig):
         raise HTTPException(401, "Invalid token")
     data = json.loads(b64d(raw))
@@ -220,6 +248,18 @@ def auth_actor(con: sqlite3.Connection, authorization: str | None):
     if not user or user["status"] != "active":
         raise HTTPException(401, "Account disabled")
     return user, "session", None
+
+
+def throttle(key: str, limit: int = 8, window: int = 300) -> None:
+    t = time.time()
+    hits = [x for x in FAILS.get(key, []) if t - x < window]
+    FAILS[key] = hits
+    if len(hits) >= limit:
+        raise HTTPException(429, "Too many attempts. Try again in a few minutes.")
+
+
+def note_fail(key: str) -> None:
+    FAILS.setdefault(key, []).append(time.time())
 
 
 def require_admin(user: sqlite3.Row):
@@ -397,13 +437,16 @@ def init_db():
                    desk_day, desk_week, desk_month, api_day, api_week, api_month, maintenance)
                    VALUES (1, 0, 2.5, 1.0, 1.5, 15, 45, 120, 30, 90, 240, 0)"""
             )
-        if not con.execute("SELECT id FROM users WHERE login = 'estk'").fetchone():
+        if not con.execute("SELECT id FROM users WHERE role = 'admin'").fetchone():
+            admin_pw = os.environ.get("RX_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
+            if not os.environ.get("RX_ADMIN_PASSWORD"):
+                print(f"[rxlookup] generated admin password for 'estk': {admin_pw}", flush=True)
             con.execute(
                 """INSERT INTO users (login, email, password, role, status, balance_cents, plan, plan_until,
                    api_plan, api_plan_until, lookups, created_at)
                    VALUES ('estk', 'estk@atelier.rx', ?, 'admin', 'active', 50000, 'month', ?,
                    'month', ?, 0, ?)""",
-                (hash_pw("estk1234"), (now() + timedelta(days=30)).strftime("%Y-%m-%d %H:%M"),
+                (hash_pw(admin_pw), (now() + timedelta(days=30)).strftime("%Y-%m-%d %H:%M"),
                  (now() + timedelta(days=30)).strftime("%Y-%m-%d %H:%M"), stamp()),
             )
         if con.execute("SELECT COUNT(*) AS n FROM records").fetchone()["n"] == 0:
@@ -542,6 +585,9 @@ def record_out(row: sqlite3.Row, full: bool = False) -> dict[str, Any]:
     return item
 
 
+SEARCH_FIELDS = {"first_name", "last_name", "city", "state", "zip_code", "zipcode", "dob", "ssn", "phone", "address"}
+
+
 def match_rows(con: sqlite3.Connection, q: dict[str, Any], limit: int = 50) -> list[sqlite3.Row]:
     rows = con.execute("SELECT * FROM records").fetchall()
     hits = []
@@ -610,8 +656,10 @@ async def register(payload: dict[str, Any]):
     login = (payload.get("login") or "").strip().lower().replace(" ", ".")
     password = payload.get("password") or ""
     ref = (payload.get("ref") or "").strip().lower()
-    if len(login) < 2 or len(password) < 4:
-        raise HTTPException(400, "Choose a name and a password of at least four characters.")
+    if len(login) < 2 or len(login) > 32 or not LOGIN_RE.match(login) or len(password) < 8 or len(password) > 200:
+        raise HTTPException(400, "Choose a name (letters, digits, . _ -) and a password of at least eight characters.")
+    if login in RESERVED_LOGINS:
+        raise HTTPException(409, "That name is taken.")
     with db() as con:
         if con.execute("SELECT id FROM users WHERE login = ?", (login,)).fetchone():
             raise HTTPException(409, "That name is taken.")
@@ -619,7 +667,7 @@ async def register(payload: dict[str, Any]):
             ref = ""
         if ref and not con.execute("SELECT id FROM users WHERE login = ?", (ref,)).fetchone():
             ref = ""
-        role = "admin" if login in {"estk", "admin"} else "member"
+        role = "member"
         con.execute(
             """INSERT INTO users (login, email, password, role, status, balance_cents, plan, api_plan,
                referred_by, created_at) VALUES (?, ?, ?, ?, 'active', 0, 'none', 'none', ?, ?)""",
@@ -634,12 +682,17 @@ async def register(payload: dict[str, Any]):
 
 
 @app.post("/v1/auth/login")
-async def login(payload: dict[str, Any]):
+async def login(payload: dict[str, Any], request: Request):
     login = (payload.get("login") or "").strip().lower().replace(" ", ".")
     password = payload.get("password") or ""
+    ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
+    throttle(f"login:{ip}")
+    throttle(f"login:{login}")
     with db() as con:
         user = con.execute("SELECT * FROM users WHERE login = ?", (login,)).fetchone()
         if not user or not check_pw(password, user["password"]):
+            note_fail(f"login:{ip}")
+            note_fail(f"login:{login}")
             raise HTTPException(401, "Wrong name or password.")
         if user["status"] != "active":
             raise HTTPException(403, "Account is not active.")
@@ -647,13 +700,16 @@ async def login(payload: dict[str, Any]):
 
 
 @app.post("/v1/auth/key")
-async def login_key(payload: dict[str, Any]):
+async def login_key(payload: dict[str, Any], request: Request):
     key = (payload.get("key") or "").strip()
     if not key:
         raise HTTPException(400, "Enter your secret key.")
+    ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
+    throttle(f"key:{ip}")
     with db() as con:
         user = con.execute("SELECT * FROM users WHERE secret_hash = ?", (sha(key),)).fetchone()
         if not user:
+            note_fail(f"key:{ip}")
             raise HTTPException(401, "Wrong secret key.")
         if user["status"] != "active":
             raise HTTPException(403, "Account is not active.")
@@ -706,8 +762,8 @@ async def change_password(payload: dict[str, Any], authorization: str | None = H
         if not check_pw(payload.get("current") or "", user["password"]):
             raise HTTPException(400, "Current password is wrong")
         nxt = payload.get("next") or ""
-        if len(nxt) < 4:
-            raise HTTPException(400, "Use at least four characters")
+        if len(nxt) < 8 or len(nxt) > 200:
+            raise HTTPException(400, "Use at least eight characters")
         con.execute("UPDATE users SET password = ? WHERE id = ?", (hash_pw(nxt), user["id"]))
         return {"ok": True}
 
@@ -785,6 +841,7 @@ async def search(request: Request, authorization: str | None = Header(None)):
     except Exception:
         payload = dict(request.query_params)
     q = {k: str(v).strip() for k, v in (payload or {}).items() if str(v).strip()}
+    q = {k: v for k, v in q.items() if k in SEARCH_FIELDS}
     if not q:
         raise HTTPException(400, "Empty query")
     with db() as con:
@@ -952,15 +1009,20 @@ async def redeem(payload: dict[str, Any], authorization: str | None = Header(Non
 
 @app.post("/v1/deposits")
 async def deposits(payload: dict[str, Any], authorization: str | None = Header(None)):
-    method = (payload.get("method") or "BTC").upper()
-    cents = int(round(float(payload.get("amount") or 0) * 100))
-    if cents < 500:
-        raise HTTPException(400, "Minimum deposit is $5")
+    method = str(payload.get("method") or "BTC").upper()
+    if method not in {"BTC", "ETH", "LTC", "SOL", "USDT"}:
+        raise HTTPException(400, "Unknown method")
+    try:
+        cents = int(round(float(payload.get("amount") or 0) * 100))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Invalid amount")
+    if cents < 500 or cents > 10_000_000:
+        raise HTTPException(400, "Deposit must be between $5 and $100,000")
     with db() as con:
         user, _, _ = auth_actor(con, authorization)
         con.execute(
             "INSERT INTO deposits (user_id, method, amount_cents, status, txid, created_at) VALUES (?,?,?,'pending',?,?)",
-            (user["id"], method, cents, payload.get("txid") or "", stamp()),
+            (user["id"], method, cents, str(payload.get("txid") or "")[:200], stamp()),
         )
         dep_id = con.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
         return {"ok": True, "id": dep_id, "status": "pending"}
@@ -1308,7 +1370,10 @@ async def admin_credit(payload: dict[str, Any], authorization: str | None = Head
         admin, _, _ = auth_actor(con, authorization)
         require_admin(admin)
         login = (payload.get("login") or "").strip().lower()
-        cents = int(payload.get("cents") or 0)
+        try:
+            cents = int(payload.get("cents") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Invalid amount")
         user = con.execute("SELECT * FROM users WHERE login = ?", (login,)).fetchone()
         if not user:
             raise HTTPException(404, "No user with that name.")
@@ -1321,8 +1386,13 @@ async def admin_deposit(payload: dict[str, Any], authorization: str | None = Hea
     with db() as con:
         admin, _, _ = auth_actor(con, authorization)
         require_admin(admin)
-        dep_id = int(str(payload.get("id")).replace("d-", ""))
+        try:
+            dep_id = int(str(payload.get("id")).replace("d-", ""))
+        except ValueError:
+            raise HTTPException(400, "Bad deposit id")
         status = payload.get("status")
+        if status not in {"pending", "credited", "rejected", "failed"}:
+            raise HTTPException(400, "Bad status")
         dep = con.execute("SELECT * FROM deposits WHERE id = ?", (dep_id,)).fetchone()
         if not dep:
             raise HTTPException(404, "Deposit not found")
@@ -1583,6 +1653,13 @@ async def admin_settings(payload: dict[str, Any], authorization: str | None = He
                 val = payload[src]
                 if col == "maintenance":
                     val = 1 if val else 0
+                else:
+                    try:
+                        val = float(val)
+                    except (TypeError, ValueError):
+                        raise HTTPException(400, f"Bad value for {src}")
+                    if val < 0 or val > 100000:
+                        raise HTTPException(400, f"Bad value for {src}")
                 sets.append(f"{col} = ?")
                 vals.append(val)
         if sets:

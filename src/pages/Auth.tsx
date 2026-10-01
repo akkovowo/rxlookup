@@ -154,7 +154,7 @@ function AuthCard({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      minLength={4}
+                      minLength={8}
                     />
                   </Field>
                   {mode === "register" ? (
@@ -165,7 +165,7 @@ function AuthCard({
                         value={confirm}
                         onChange={(e) => setConfirm(e.target.value)}
                         required
-                        minLength={4}
+                        minLength={8}
                       />
                     </Field>
                   ) : null}

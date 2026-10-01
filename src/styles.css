@@ -6654,3 +6654,55 @@ select option {
     margin-left: 0;
   }
 }
+
+/* ── Polish layer ─────────────────────────────────────────── */
+::selection {
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--ink);
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+:where(button, .btn, a[class*="btn"]):not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+:where(button, .btn):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+table,
+.mono,
+.stat,
+.balance {
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  transition:
+    border-color var(--dur-2) var(--ease),
+    box-shadow var(--dur-3) var(--ease),
+    transform var(--dur-3) var(--ease);
+}
+
+@media (hover: hover) {
+  .card:hover {
+    border-color: var(--line-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
