@@ -7,9 +7,9 @@ host = os.environ["RX_HOST"]
 user = os.environ["RX_USER"]
 password = os.environ["RX_PASS"]
 remote_root = "/opt/rxlookup-api"
-local_api = Path(r"c:\Users\akkov\Desktop\rxlookup\api")
-local_unit = Path(r"c:\Users\akkov\Desktop\rxlookup\deploy\rxlookup-api.service")
-local_nginx = Path(r"c:\Users\akkov\Desktop\rxlookup\deploy\nginx.rxlookup.conf")
+local_api = Path(__file__).resolve().parent.parent / "api"
+local_unit = Path(__file__).resolve().parent.parent / "deploy" / "rxlookup-api.service"
+local_nginx = Path(__file__).resolve().parent.parent / "deploy" / "nginx.rxlookup.conf"
 
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())

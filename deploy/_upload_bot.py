@@ -8,8 +8,8 @@ user = os.environ["RX_USER"]
 password = os.environ["RX_PASS"]
 token = os.environ.get("TG_BOT_TOKEN", "").strip()
 remote_root = "/opt/rxlookup-bot"
-local_bot = Path(r"c:\Users\akkov\Desktop\rxlookup\bot")
-local_unit = Path(r"c:\Users\akkov\Desktop\rxlookup\deploy\rxlookup-bot.service")
+local_bot = Path(__file__).resolve().parent.parent / "bot"
+local_unit = Path(__file__).resolve().parent.parent / "deploy" / "rxlookup-bot.service"
 
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())

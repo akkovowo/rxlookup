@@ -7,7 +7,7 @@ host = os.environ["RX_HOST"]
 user = os.environ["RX_USER"]
 password = os.environ["RX_PASS"]
 remote_root = "/var/www/rxlookup"
-local_dist = Path(r"c:\Users\akkov\Desktop\rxlookup\dist")
+local_dist = Path(__file__).resolve().parent.parent / "dist"
 
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
